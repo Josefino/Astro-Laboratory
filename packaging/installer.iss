@@ -5,7 +5,8 @@
 AppId={{4C164BDC-01C0-4A3D-BE43-57CFC401F320}
 AppName={#AppName}
 AppVersion={#AppVersion}
-DefaultDirName={localappdata}\Programs\AstroProcessor
+DefaultDirName={localappdata}\Programs\AstroLaboratory
+UsePreviousAppDir=no
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest

@@ -19,7 +19,7 @@ Outputs:
 - `dist\AstroLaboratory\AstroLaboratory.exe`: portable application folder. Distribute the entire folder, not only its EXE.
 - `release\AstroLaboratory-0.8.0-Windows-Setup.exe`: actual installation wizard, with Start Menu shortcut, optional desktop shortcut and uninstaller.
 
-Installation is per-user under `%LOCALAPPDATA%\Programs\AstroProcessor` and does not request administrator rights. Work files are stored separately in `%LOCALAPPDATA%\AstroProcessor\work`, so reinstalling/uninstalling the application does not delete photographs. User settings remain in the browser for http://127.0.0.1:8765.
+Installation is per-user under `%LOCALAPPDATA%\Programs\AstroLaboratory` and does not request administrator rights. Work files are stored separately in `%LOCALAPPDATA%\AstroProcessor\work`, so reinstalling/uninstalling the application does not delete photographs. User settings remain in the browser for http://127.0.0.1:8765.
 
 If Python is not selected correctly:
 
@@ -89,4 +89,4 @@ The scripts and installer definitions have been prepared and their Python/shell/
 
 When publishing an installer, preserve any required third-party license notices. This package is a build kit, not a declaration of a new license for all included open-source dependencies or your external proprietary plugins.
 
-Existing internal installation and data directories retain the AstroProcessor name for compatibility with earlier installations.
+Internal data directories retain the AstroProcessor name for compatibility with earlier installations. The installer proposes AstroLaboratory even after an earlier installation; you can choose another destination manually.
