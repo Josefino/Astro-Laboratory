@@ -1,0 +1,6 @@
+numpy>=1.26,<3
+scipy>=1.11,<2
+astropy>=6,<9
+Flask>=3,<4
+Pillow>=10,<13
+tifffile>=2024.1

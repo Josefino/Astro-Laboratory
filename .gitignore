@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+.build-venv/
+.pytest_cache/
+work/
+build/
+dist/
+release/
+settings.env
+desktop.json
+application-settings.json
+*.log
+.DS_Store
