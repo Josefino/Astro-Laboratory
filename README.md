@@ -2,7 +2,7 @@
 
 Astro Laboratory processes astronomical FITS and TIFF images locally, using an English browser interface and optional GraXpert and RC-Astro integrations. It supports linear stacks and explicitly selected already-stretched images, separate starless/stars adjustments, and Screen recombination with Unscreen Stars.
 
-The interface is available at **http://127.0.0.1:8765**. Image processing runs on your computer. No OpenAI API key or ChatGPT subscription is needed. External tools and their models may require their own installation, activation, and downloads.
+The interface is available at **http://127.0.0.1:8765**. Image processing runs on your computer. External tools and their models may require their own installation, activation, and downloads.
 
 ## Contents
 
