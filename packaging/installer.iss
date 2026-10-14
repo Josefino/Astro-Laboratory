@@ -1,6 +1,9 @@
 #define AppName "Astro Laboratory"
-#define AppVersion "0.8.0"
+#define AppVersion "0.9.0"
 #define AppExe "AstroLaboratory.exe"
+#if !FileExists("..\dist\AstroLaboratory\_internal\static\index.html")
+  #error Missing packaged static/index.html. Run build_windows.bat before compiling this installer.
+#endif
 [Setup]
 AppId={{4C164BDC-01C0-4A3D-BE43-57CFC401F320}
 AppName={#AppName}
@@ -20,6 +23,9 @@ CloseApplications=yes
 
 [Files]
 Source: "..\dist\AstroLaboratory\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Include the interface explicitly, including when the resource directory is hidden.
+Source: "..\dist\AstroLaboratory\_internal\static\index.html"; DestDir: "{app}\_internal\static"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked

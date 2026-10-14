@@ -1,4 +1,4 @@
-# Astro Laboratory 0.8.0 — EXE / DMG build kit
+# Astro Laboratory 0.9.0 — EXE / DMG build kit
 
 This complete source package includes the current English interface, GraXpert and RC-Astro adapters, sample-background noise measurement, S-curve, star brightness, saturation 0–300%, saved/reset settings, automatic Bayer import, three-column layout, Input/After blinking and the processing overlay.
 
@@ -15,7 +15,9 @@ For installed-app runtime settings, use `packaging/desktop.example.json` as desc
 
 No prebuilt EXE/DMG binaries, private settings, API keys, license keys, working images, Python virtual environments, or caches are included.
 
-Verified in the Linux build workspace: 53 application tests, Python/Bash/JavaScript syntax, actual local HTTP startup, static-resource serving and authenticated shutdown. Final native packaging, signing, EXE installation and DMG installation require verification on the target Windows/macOS computer.
+Verified in the Linux build workspace: 57 application tests, Python/Bash/JavaScript syntax, actual local HTTP startup, static-resource serving and authenticated shutdown. Final native packaging, signing, EXE installation and DMG installation require verification on the target Windows/macOS computer.
 
 ## RC-Astro CLI path
 In the RC-Astro panel, paste the executable path and click **Verify & save CLI path**. The path takes effect immediately and persists across application launches. Then click **Check licenses**. A Photoshop/Affinity plugin or license file cannot replace the CLI executable.
+
+Version 0.9.0 includes Already stretched input, corrected pre-adjustment Unscreen extraction, and Screen recombination. See README.md for the complete current workflow.

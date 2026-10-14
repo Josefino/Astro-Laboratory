@@ -35,7 +35,7 @@ if not defined INNO_COMPILER (
 "%INNO_COMPILER%" packaging\installer.iss
 if errorlevel 1 goto failed
 echo.
-echo DONE: release\AstroLaboratory-0.8.0-Windows-Setup.exe
+echo DONE: release\AstroLaboratory-0.9.0-Windows-Setup.exe
 pause
 exit /b 0
 :failed

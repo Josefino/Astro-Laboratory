@@ -29,7 +29,7 @@ Your default browser opens the local interface.
 Use Quit in the app's web interface to stop the local server.
 GraXpert and RC-Astro must be installed and licensed separately.
 EOF
-dmg_path="$PWD/release/AstroLaboratory-0.8.0-macOS-$build_arch.dmg"
+dmg_path="$PWD/release/AstroLaboratory-0.9.0-macOS-$build_arch.dmg"
 if [ -f "$dmg_path" ]; then
   mv "$dmg_path" "$dmg_path.previous-$(date +%Y%m%d-%H%M%S)"
 fi

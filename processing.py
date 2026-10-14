@@ -12,7 +12,7 @@ import tifffile
 
 MAX_SAMPLES = 120_000_000
 
-def read_fits(path, allow_bayer=False):
+def read_fits(path, allow_bayer=False, allow_nonlinear=False):
     with fits.open(path, memmap=False) as hdus:
         candidates = [h for h in hdus if isinstance(h, (fits.PrimaryHDU, fits.ImageHDU, fits.CompImageHDU)) and h.header.get('NAXIS', 0) in (2, 3)]
         if not candidates:
@@ -23,7 +23,7 @@ def read_fits(path, allow_bayer=False):
             raise ValueError('Image exceeds the limit of 120 million samples.')
         a = np.array(h.data, dtype=np.float64)
         header = h.header.copy()
-    if header.get('APLINEAR') is False:
+    if header.get('APLINEAR') is False and not allow_nonlinear:
         raise ValueError('FITS is marked as nonlinear. Load a linear stack.')
     if a.ndim == 3:
         if a.shape[0] == 3:
@@ -79,14 +79,14 @@ def analyze(a, header):
             'noise_note':'Robust estimate from diagonal differences; structure, resampling and correlations may bias it.'}
 
 def settings(raw):
-    limits={'strength':(0,200,30),'denoise':(0,100,20),'detail':(0,100,0),'stretch':(1,200,30),'saturation':(0,300,100),'green_reduction':(0,100,0),'s_curve_strength':(0,100,0),'s_curve_pivot':(5,90,30),'star_brightness':(10,100,100),'star_sharpen':(0,0.7,0.1),'halo':(-0.5,0.5,0),'graxpert_smoothing':(0,1,0.5),'graxpert_sample_size':(5,101,25)}
+    limits={'input_white':(1,4294967295,65535),'strength':(0,200,30),'denoise':(0,100,20),'detail':(0,100,0),'stretch':(1,200,30),'saturation':(0,300,100),'green_reduction':(0,100,0),'s_curve_strength':(0,100,0),'s_curve_pivot':(5,90,30),'stars_stretch':(1,200,30),'stars_saturation':(0,300,100),'stars_s_curve_strength':(0,100,0),'stars_s_curve_pivot':(5,90,30),'star_brightness':(10,100,100),'star_sharpen':(0,0.7,0.1),'halo':(-0.5,0.5,0),'graxpert_smoothing':(0,1,0.5),'graxpert_sample_size':(5,101,25)}
     out={}
     for k,(low,high,default) in limits.items():
         v=float(raw.get(k,default))
         if not math.isfinite(v) or not low<=v<=high:
             raise ValueError(f'Invalid parameter {k}.')
         out[k]=v
-    for k in ['gradient','protect','bxt','nxt','sxt','graxpert_gpu']:
+    for k in ['gradient','protect','bxt','nxt','sxt','unscreen_stars','already_stretched','graxpert_gpu']:
         v=raw.get(k, k in ('protect','graxpert_gpu'))
         if not isinstance(v,bool):
             raise ValueError(f'{k} must be a boolean.')
@@ -295,3 +295,34 @@ def measure_sample_noise(a,points,sample_size):
             'method':'Median of sample MAD sigma after local-plane removal and iterative 3.5-sigma rejection.',
             'units':'Original input data units; RGB noise is measured in weighted luminance.',
             'note':'Measured before gradient removal, denoising and stretching. This is not SNR. Nebulosity, unresolved stars and correlated/resampled noise may bias estimates.'}
+
+
+def unscreen_layer(original,starless):
+    original=np.clip(original,0,1);starless=np.clip(starless,0,1)
+    return np.clip(np.divide(np.maximum(original-starless,0),1-starless,
+        out=np.zeros_like(original),where=(1-starless)>1e-7),0,1)
+
+def rendered_color(image,saturation):
+    image=np.clip(image,0,1)
+    if image.ndim==3:
+        light=luminance(image)[...,None]
+        image=light+(image-light)*(saturation/100)
+    return np.clip(image,0,1).astype(np.float32)
+
+def render_separate_layers(starless,stars,scale,p):
+    """Stars are extracted before adjustments; never reconstruct them here."""
+    if p.get('already_stretched'):
+        object_display=rendered_color(starless,p['saturation'])
+        stars_display=rendered_color(stars,p['stars_saturation'])
+    else:
+        object_display=stretch(starless,scale,p['stretch'],p['saturation'])
+        stars_display=stretch(np.maximum(stars,0),(0,scale[1]),p['stars_stretch'],p['stars_saturation'])
+    object_display=apply_s_curve(object_display,p['s_curve_strength'],p['s_curve_pivot'])
+    object_display=reduce_green_display(object_display,p['green_reduction'])
+    stars_display=apply_s_curve(stars_display,p['stars_s_curve_strength'],p['stars_s_curve_pivot'])
+    stars_display=stars_display*(p['star_brightness']/100)
+    combined=1-(1-object_display)*(1-stars_display) if p.get('unscreen_stars',False) else object_display+stars_display
+    if combined.ndim==3:
+        combined=combined/np.maximum(1,np.max(combined,axis=-1,keepdims=True))
+    else:combined=np.clip(combined,0,1)
+    return combined.astype(np.float32),object_display,stars_display

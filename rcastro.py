@@ -68,7 +68,8 @@ def run(product,a,header,directory,options=()):
     exe=executable()
     if not exe:
         raise ValueError('RC-Astro CLI not found. Enter and save the CLI path in the RC-Astro section.')
-    low=float(a.min()); span=max(float(a.max())-low,1e-12)
+    low=0.0 if header.get('APLINEAR') is False else float(a.min())
+    span=1.0 if header.get('APLINEAR') is False else max(float(a.max())-low,1e-12)
     normalized=(a-low)/span
     if product=='sxt':
         source=directory/'rc-sxt-input.tif'
@@ -93,7 +94,7 @@ def run(product,a,header,directory,options=()):
         if b.shape!=a.shape:
             raise ValueError('StarXTerminator changed image dimensions or channel count; output rejected.')
     else:
-        b,_=read_fits(target)
+        b,_=read_fits(target,allow_nonlinear=True)
         b,orientation=match_orientation(normalized,b)
     import json
     (directory/f'rc-{product}-orientation.json').write_text(json.dumps(orientation,indent=2),encoding='utf-8')

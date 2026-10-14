@@ -1,0 +1,13 @@
+MACOS UPDATE — COMPLETE SOURCE PACKAGE
+
+1. Quit the running Astro Laboratory using Quit in the browser header.
+2. Extract this ZIP into a NEW folder. Do not merge it into an older source folder.
+3. In Terminal, change to the extracted AstroLaboratory folder.
+4. Run: bash build_macos.command
+5. Open the newly generated DMG in release/ and replace AstroLaboratory.app in Applications.
+6. Launch /Applications/AstroLaboratory.app and hard-refresh Chrome with Cmd+Shift+R.
+
+The Unscreen Stars checkbox is in the RC-Astro panel, inside Star settings, ABOVE BlurXTerminator star settings. Enable StarXTerminator to make this control active.
+
+Editing static/index.html in a source folder does not change an already packaged .app.
+This ZIP contains source files and build scripts, not a prebuilt macOS application.

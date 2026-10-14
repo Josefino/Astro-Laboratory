@@ -1,5 +1,6 @@
 """Run with build-venv Python on the native Windows/macOS platform."""
 import argparse
+import hashlib
 import os
 from pathlib import Path
 import platform
@@ -7,7 +8,7 @@ import subprocess
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
-VERSION='0.8.0'
+VERSION='0.9.0'
 NAME='AstroLaboratory'
 
 
@@ -17,6 +18,8 @@ def main():
         raise SystemExit('Build Windows on Windows and macOS on macOS.')
     if sys.version_info<(3,11):raise SystemExit('Python 3.11+ is required; Python 3.12 is recommended.')
     if sys.maxsize<=2**32:raise SystemExit('Use 64-bit Python to build this application.')
+    interface=ROOT/'static/index.html'
+    if not interface.is_file():raise SystemExit(f'Missing interface source: {interface}')
     cmd=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--onedir','--name',NAME,
          '--distpath',str(ROOT/'dist'),'--workpath',str(ROOT/'build/pyinstaller'),'--specpath',str(ROOT/'build'),
          '--add-data',str(ROOT/'static')+os.pathsep+'static',
@@ -29,6 +32,12 @@ def main():
     else:cmd.extend(['--version-file',str(ROOT/'packaging/windows_version.txt')])
     cmd.append(str(ROOT/'desktop_launcher.py'))
     subprocess.run(cmd,cwd=ROOT,check=True)
+    if sys.platform=='win32':
+        packaged=ROOT/'dist'/NAME/'_internal/static/index.html'
+        if not packaged.is_file():
+            raise SystemExit(f'Build incomplete: missing {packaged}. Installer creation stopped.')
+        if hashlib.sha256(packaged.read_bytes()).digest()!=hashlib.sha256(interface.read_bytes()).digest():
+            raise SystemExit('Packaged interface differs from source. Installer creation stopped.')
     print(f'Built {NAME} {VERSION} for {sys.platform} ({platform.machine()}).')
 
 

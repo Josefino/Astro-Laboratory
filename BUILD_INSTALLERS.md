@@ -2,7 +2,7 @@
 
 This package includes the complete current source and two native build scripts. End users do not need Python. GraXpert and RC-Astro are separate installed/licensed applications; their installers, models and keys are not included.
 
-The application name is Astro Laboratory. The executable/bundle name is AstroLaboratory. Build version: 0.8.0.
+The application name is Astro Laboratory. The executable/bundle name is AstroLaboratory. Build version: 0.9.0.
 
 ## Windows: EXE setup wizard
 
@@ -17,7 +17,7 @@ The script creates its own `.build-venv`, installs runtime/build dependencies, p
 Outputs:
 
 - `dist\AstroLaboratory\AstroLaboratory.exe`: portable application folder. Distribute the entire folder, not only its EXE.
-- `release\AstroLaboratory-0.8.0-Windows-Setup.exe`: actual installation wizard, with Start Menu shortcut, optional desktop shortcut and uninstaller.
+- `release\AstroLaboratory-0.9.0-Windows-Setup.exe`: actual installation wizard, with Start Menu shortcut, optional desktop shortcut and uninstaller.
 
 Installation is per-user under `%LOCALAPPDATA%\Programs\AstroLaboratory` and does not request administrator rights. Work files are stored separately in `%LOCALAPPDATA%\AstroProcessor\work`, so reinstalling/uninstalling the application does not delete photographs. User settings remain in the browser for http://127.0.0.1:8765.
 
@@ -54,7 +54,7 @@ ASTRO_BUILD_PYTHON='/absolute/path/to/python3.12' bash build_macos.command
 Outputs:
 
 - `dist/AstroLaboratory.app`
-- `release/AstroLaboratory-0.8.0-macOS-arm64.dmg` on native Apple Silicon Python, or `...-x86_64.dmg` on Intel/x86 Python.
+- `release/AstroLaboratory-0.9.0-macOS-arm64.dmg` on native Apple Silicon Python, or `...-x86_64.dmg` on Intel/x86 Python.
 
 Open the DMG and drag AstroLaboratory.app to Applications. This is a standard drag-to-install DMG, not a PKG installation wizard. No Python is needed on the target computer. Work files are stored in `~/Library/Application Support/AstroProcessor/work`, outside the app bundle and disk image.
 

@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from flask import Flask,request,jsonify,send_file,abort
 from werkzeug.exceptions import HTTPException
-from processing import read_fits,read_tiff,analyze,settings,process,display_params,stretch,png,write_fits,file_hash,luminance,reduce_green_display,apply_s_curve,measure_sample_noise
+from processing import unscreen_layer,rendered_color,render_separate_layers,read_fits,read_tiff,analyze,settings,process,display_params,stretch,png,write_fits,file_hash,luminance,reduce_green_display,apply_s_curve,measure_sample_noise
 import tifffile
 import rcastro
 import graxpert_adapter
@@ -60,7 +60,7 @@ def index():
 @app.get('/api/config')
 def config():
     return jsonify(token=TOKEN,app_id='astro-processor',desktop=bool(app.config.get('DESKTOP_MODE')),
-                   rc_available=bool(rcastro.executable()),rc_astro_path=os.environ.get('RC_ASTRO_PATH',''),graxpert_path=graxpert_adapter.executable() or '',version='0.8.0')
+                   rc_available=bool(rcastro.executable()),rc_astro_path=os.environ.get('RC_ASTRO_PATH',''),graxpert_path=graxpert_adapter.executable() or '',version='0.9.0')
 
 @app.post('/api/quit')
 def quit_desktop():
@@ -112,7 +112,7 @@ def upload():
     original=directory/original_name
     f.save(original)
     try:
-        a,h=read_tiff(original) if original.suffix in ('.tif','.tiff') else read_fits(original,allow_bayer=True)
+        a,h=read_tiff(original) if original.suffix in ('.tif','.tiff') else read_fits(original,allow_bayer=True,allow_nonlinear=True)
         write_fits(a,h,directory/'input.fits')
         metrics=analyze(a,h); scale=display_params(a)
         png(stretch(a,scale,30),directory/'input.png')
@@ -126,7 +126,7 @@ def upload():
 def sample_noise(sid):
     directory=session(sid)
     p=settings(request.get_json() or {})
-    a,_=read_fits(directory/'input.fits')
+    a,_=read_fits(directory/'input.fits',allow_nonlinear=True)
     return jsonify(measure_sample_noise(a,p['background_points'],p['graxpert_sample_size']))
 
 @app.post('/api/background/<sid>')
@@ -166,11 +166,19 @@ def work(sid,job,directory,p):
     try:
         update(status='running',progress='Processing linear data…')
         source=DATA/sid
-        a,h=read_fits(source/'input.fits')
+        a,h=read_fits(source/'input.fits',allow_nonlinear=True)
+        nonlinear=p['already_stretched']
+        if h.get('APLINEAR') is False and not nonlinear:raise ValueError('FITS is marked nonlinear. Enable Already stretched input.')
+        if p['unscreen_stars'] and not nonlinear:raise ValueError('Unscreen Stars requires Already stretched input mode.')
+        if nonlinear:
+            if a.min()<0 or a.max()>p['input_white']*1.00001:raise ValueError('Input values exceed the selected input white level. Choose the correct scale.')
+            a=a/p['input_white'];h=h.copy();h['APLINEAR']=False
+            p=p.copy();p['bxt']=False;p['gradient']=False
         sample_noise_report=measure_sample_noise(a,p['background_points'],p['graxpert_sample_size']) if p['background_points'] else None
         factor=p['strength']/100
         working=a
         log=[]
+        if nonlinear:log.append("Already stretched: input divided by selected white level; no black-point subtraction or percentile normalization. BlurXTerminator and gradient removal skipped; additional stretch bypassed.")
         base_settings=p.copy()
         if p['gradient'] and p['gradient_method']=='graxpert':
             base_settings['gradient']=False
@@ -208,7 +216,9 @@ def work(sid,job,directory,p):
             update(progress='GraXpert skipped: overall strength is 0%.')
         else:
             update(progress='GraXpert complete. Continuing linear processing…')
-        b,base_log=process(working,base_settings)
+        gradient_settings=base_settings.copy();gradient_settings.update(denoise=0,detail=0)
+        b,base_log=process(working,gradient_settings)
+        base_settings['gradient']=False
         log.extend(base_log)
         if p['bxt'] and factor:
             update(progress='BlurXTerminator…')
@@ -219,11 +229,11 @@ def work(sid,job,directory,p):
         if p['sxt'] and factor:
             update(progress='StarXTerminator…')
             starless=rcastro.run('sxt',b,h,directory)
-            stars=b-starless
+            stars=unscreen_layer(b,starless) if p['unscreen_stars'] else b-starless
             b=starless
-            write_fits(stars,h,directory/'stars_linear.fits')
-            write_fits(starless,h,directory/'starless_linear.fits')
-            log.append('StarXTerminator: separate layers saved; stars are the input minus the starless layer.')
+            write_fits(stars,h,directory/('stars_unscreen.fits' if p['unscreen_stars'] else ('stars_nonlinear.fits' if nonlinear else 'stars_linear.fits')),nonlinear=nonlinear)
+            write_fits(starless,h,directory/('starless_nonlinear.fits' if nonlinear else 'starless_linear.fits'),nonlinear=nonlinear)
+            log.append('Unscreen extracted immediately from the unmodified SXT input/output pair, before NoiseXTerminator and curves.' if p['unscreen_stars'] else 'StarXTerminator: stars extracted by subtraction before subsequent adjustments.')
         if p['nxt'] and factor and p['denoise']:
             update(progress='NoiseXTerminator…')
             target=b
@@ -231,39 +241,49 @@ def work(sid,job,directory,p):
             mixed=target+factor*(p['denoise']/100)*(clean-target)
             b=mixed
             log.append('NoiseXTerminator: default CLI parameters; amount controlled by blending in linear space.')
+        b,linear_log=process(b,base_settings)
+        log.extend(linear_log)
+        starless_processed=b if stars is not None else None
         if stars is not None:
-            b=b+stars*(p['star_brightness']/100)
-            log.append(f'SXT: star layer added back at {p["star_brightness"]:g} percent brightness in linear space.')
+            weighted=stars*(p['star_brightness']/100)
+            b=1-(1-b)*(1-weighted) if p['unscreen_stars'] else b+weighted
+            log.append(f'SXT: data-layer recombination at {p["star_brightness"]:g} percent brightness; Screen when Unscreen is enabled.')
         update(progress='Preparing previews and exports…')
         scale=json.loads((source/'input.json').read_text(encoding='utf-8'))['scale']
-        before=stretch(a,scale,p['stretch'],p['saturation'])
-        display=stretch(b,scale,p['stretch'],p['saturation'])
-        display=apply_s_curve(display,p['s_curve_strength'],p['s_curve_pivot'])
-        if p['s_curve_strength']:
-            log.append('Luminance S-curve after stretching with RGB ratios preserved; linear FITS is unaffected.')
-        display=reduce_green_display(display,p['green_reduction'])
-        if p['green_reduction']:
-            log.append('Green noise reduction: excess green suppressed after stretching; linear FITS is unaffected.' if b.ndim==3 else 'Green noise reduction: monochrome image, no color adjustment.')
+        before=np.clip(a,0,1) if nonlinear else stretch(a,scale,p['stretch'],p['saturation'])
+        if stars is not None:
+            update(progress='Stretching starless and stars independently…')
+            display,object_display,stars_display=render_separate_layers(starless_processed,stars,scale,p)
+            png(object_display,directory/'starless_stretched.png',maxsize=max(b.shape[:2]))
+            png(stars_display,directory/'stars_stretched.png',maxsize=max(b.shape[:2]))
+            if p.get('unscreen_stars'):log.append('Unscreen Stars: inverse Screen extraction before adjustments; Screen recombination after star brightness scaling.')
+            log.append('Independent layer rendering; already-stretched mode bypasses stretch. Brightness applied before merging; Screen for Unscreen, addition otherwise. No curve after merging.')
+        else:
+            display=rendered_color(b,p['saturation']) if nonlinear else stretch(b,scale,p['stretch'],p['saturation'])
+            display=apply_s_curve(display,p['s_curve_strength'],p['s_curve_pivot'])
+            display=reduce_green_display(display,p['green_reduction'])
         png(before,directory/'before.png'); png(display,directory/'after.png')
         delta=b-a
         noise=max(analyze(a,h)['noise_estimate'],1e-12)
         changed=np.abs(luminance(delta))/(3*noise)
         png(np.clip(changed,0,1),directory/'changes.png')
         png(np.clip(0.5+luminance(delta)/(6*noise),0,1),directory/'difference.png')
-        history=['Astro AI Processor 0.1.0',json.dumps(p,sort_keys=True),*log]
-        write_fits(b,h,directory/'processed_linear.fits',history=history)
+        history=['Astro Laboratory 0.9.0',json.dumps(p,sort_keys=True),*log]
+        write_fits(b,h,directory/('processed_nonlinear.fits' if nonlinear else 'processed_linear.fits'),nonlinear=nonlinear,history=history)
         write_fits(display,h,directory/'processed_stretched.fits',nonlinear=True,history=history)
-        write_fits(delta,h,directory/'difference_linear.fits',history=['Signed difference: processed minus input'])
+        write_fits(delta,h,directory/('difference_nonlinear.fits' if nonlinear else 'difference_linear.fits'),nonlinear=nonlinear,history=['Signed difference: processed minus input'])
         tifffile.imwrite(directory/'processed_16bit.tif',np.round(display*65535).astype('uint16'),photometric='rgb' if b.ndim==3 else 'minisblack')
         png(display,directory/'processed.png',maxsize=max(b.shape[:2]))
-        report={'sample_noise':sample_noise_report,'version':'0.8.0','background_model_available':(directory/'background.png').is_file(),'input_sha256':json.loads((source/'input.json').read_text(encoding='utf-8'))['sha256'],'settings':p,
+        report={'sample_noise':sample_noise_report,'version':'0.9.0','background_model_available':(directory/'background.png').is_file(),'input_sha256':json.loads((source/'input.json').read_text(encoding='utf-8'))['sha256'],'settings':p,
             'before':analyze(a,h),'after':analyze(b,h),'steps':log,
             'changed_above_3_noise_fraction':float(np.mean(changed>1)),
             'clipped_display_fraction':float(np.mean((display<=0)|(display>=1))),
             'integrity':'No generative fill. Change maps measure modifications, not evidence reliability. One stack cannot certify details. RC-Astro uses learned models; inspect artifacts.',
             'color_calibration':'Not performed. Saturation is aesthetic; not photometric calibration.'}
+        if nonlinear:
+            for label in ('before','after'):report[label]['linearity']='User-declared already stretched input; normalized by selected input white level.'
         (directory/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
-        files=[f.name for f in directory.iterdir() if f.name in ['processed_linear.fits','processed_stretched.fits','processed_16bit.tif','processed.png','report.json','difference_linear.fits','stars_linear.fits','starless_linear.fits','graxpert_removed_background.fits','graxpert_background_model.fits']]
+        files=[f.name for f in directory.iterdir() if f.name in ['starless_stretched.png','stars_stretched.png','processed_linear.fits','processed_stretched.fits','processed_16bit.tif','processed.png','report.json','difference_linear.fits','stars_unscreen.fits','stars_nonlinear.fits','starless_nonlinear.fits','processed_nonlinear.fits','difference_nonlinear.fits','stars_linear.fits','starless_linear.fits','graxpert_removed_background.fits','graxpert_background_model.fits']]
         update(status='done',progress='Done.',result={'prefix':f'/api/result/{sid}/{job}/','files':sorted(files),'report':report})
     except Exception as e:
         traceback.print_exc(); update(status='error',error=str(e))
@@ -286,7 +306,7 @@ def get_input(sid,name):
 def result(sid,job,name):
     directory=session(sid)
     if len(job)!=32 or any(c not in '0123456789abcdef' for c in job): abort(404)
-    allowed={'before.png','after.png','changes.png','difference.png','processed_linear.fits','processed_stretched.fits','processed_16bit.tif','processed.png','report.json','difference_linear.fits','stars_linear.fits','starless_linear.fits','graxpert_removed_background.fits','graxpert_background_model.fits','gradient_preview_linear.fits','background.png'}
+    allowed={'before.png','after.png','changes.png','difference.png','starless_stretched.png','stars_stretched.png','processed_linear.fits','processed_stretched.fits','processed_16bit.tif','processed.png','report.json','difference_linear.fits','stars_unscreen.fits','stars_nonlinear.fits','starless_nonlinear.fits','processed_nonlinear.fits','difference_nonlinear.fits','stars_linear.fits','starless_linear.fits','graxpert_removed_background.fits','graxpert_background_model.fits','gradient_preview_linear.fits','background.png'}
     if name not in allowed: abort(404)
     file=directory/job/name
     if not file.is_file(): abort(404)
